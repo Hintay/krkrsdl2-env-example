@@ -34,21 +34,21 @@ env:
 
 jobs:
   build-web:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       EM_VERSION: 3.1.24
       EM_CACHE_FOLDER: emsdk-cache
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential libsdl2-dev git
+          sudo apt-get install build-essential libsdl2-dev
 
       - name: Setup cache
         id: cache-system-libraries
@@ -77,7 +77,7 @@ jobs:
           cmake --build build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           name: krkrsdl2-web
           path: |
@@ -86,11 +86,11 @@ jobs:
             build/krkrsdl2_repo/index.html
 
   build-ubuntu:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -99,24 +99,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install build-essential libsdl2-dev
 
-      - name: Set up base environment
-        run: |
-          sudo apt-get install build-essential
-          echo "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin" >> $GITHUB_PATH
+      - name: Set up Homebrew environment
+        run: echo "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin" >> $GITHUB_PATH
+
+      - name: Set up default build tools
+        run: brew install make nasm ninja cmake
+
+      - name: Configure project
+        run: cmake -S . -B build
 
       - name: Build project
-        run: |
-          emcmake cmake -S . -B build
-          cmake --build build
+        run: cmake --build build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           name: krkrsdl2-ubuntu
           path: build/krkrsdl2_repo/krkrsdl2
 
   build-win32:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -124,42 +126,41 @@ jobs:
         platform:
           - triplet: i686-w64-mingw32
             cmake-system-compiler: i686
-            compiler: gcc
+
           - triplet: x86_64-w64-mingw32
             cmake-system-compiler: amd64
-            compiler: gcc
-          - triplet: i686-w64-mingw32
-            cmake-system-compiler: i686
+        compiler: [gcc, clang]
+
+        include:
+          - platform:
+              triplet: armv7-w64-mingw32
+              cmake-system-compiler: arm
             compiler: clang
-          - triplet: x86_64-w64-mingw32
-            cmake-system-compiler: amd64
-            compiler: clang
-          - triplet: armv7-w64-mingw32
-            cmake-system-compiler: arm
-            compiler: clang
-          - triplet: aarch64-w64-mingw32
-            cmake-system-compiler: arm64
+
+          - platform:
+              triplet: aarch64-w64-mingw32
+              cmake-system-compiler: arm64
             compiler: clang
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with:
-          submodules: recursive
-
       - name: Set up base environment
         run: |
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential git
           echo "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin" >> $GITHUB_PATH
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up default build tools
         run: brew install make nasm ninja cmake
 
       - name: Set up mingw-w64 for GCC
-        if: matrix.platform.compiler == 'gcc'
+        if: matrix.compiler == 'gcc'
         run: brew install mingw-w64
 
       - name: Set up mingw-w64 for Clang
-        if: matrix.platform.compiler == 'clang'
+        if: matrix.compiler == 'clang'
         run: |
           curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20220323/llvm-mingw-20220323-msvcrt-ubuntu-18.04-x86_64.tar.xz
           tar xvf llvm-mingw-20220323-msvcrt-ubuntu-18.04-x86_64.tar.xz
@@ -184,14 +185,19 @@ jobs:
       - name: Build project
         run: cmake --build build
 
+      - name: Archive artifact
+        run: |
+          cd build 
+          7z a -tzip krkrsdl2-win32-${{ matrix.platform.cmake-system-compiler }}-${{ matrix.platform.compiler }}.zip *.exe
+
       - name: Upload build artifacts
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
-          name: krkrsdl2-win32-${{ matrix.platform.cmake-system-compiler }}
-          path: build/krkrsdl2_repo/krkrsdl2.exe
+          name: krkrsdl2-win32-${{ matrix.platform.cmake-system-compiler }}-${{ matrix.compiler }}
+          path: build/*.zip
 
   build-vita:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
       image: vitasdk/vitasdk:latest
@@ -202,7 +208,7 @@ jobs:
           apk add cmake make ninja git curl
 
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -215,26 +221,26 @@ jobs:
           cmake --build build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           name: krkrsdl2-vita
           path: build/krkrsdl2_repo/krkrsdl2.vpk
 
   build-switch:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
-      image: devkitpro/devkita64:20210726
+      image: devkitpro/devkita64:latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with:
-          submodules: recursive
-
       - name: Install dependencies
         run: |
           apt-get -y update
           apt-get -y install cmake make ninja-build git curl
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Download krkrsdl2-kag3-demo build
         run: curl -LOC - https://github.com/krkrsdl2/krkrsdl2-kag3-demo/releases/download/latest/data.xp3
@@ -245,30 +251,40 @@ jobs:
           cmake --build build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           name: krkrsdl2-switch
           path: build/krkrsdl2_repo/krkrsdl2.nro
 
-  build-macos-cmake:
-    runs-on: macos-11
+  build-darwin-cmake:
+    runs-on: macos-14
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         appbundle:
-          - enabled: false
-            cmakeflags: -DOPTION_BUILD_MACOS_BUNDLE=OFF
-            artifactname: krkrsdl2-macos
-            artifactpath: build/krkrsdl2_repo/krkrsdl2
+          - platform: MacOS
+            enabled: false
+            cmake-flags: -DOPTION_BUILD_MACOS_BUNDLE=OFF
+            artifact-name: krkrsdl2-macos
+            artifact-path: build/krkrsdl2_repo/krkrsdl2
 
-          - enabled: true
-            cmakeflags: -DOPTION_BUILD_MACOS_BUNDLE=ON -DEMBED_DATA_PATH=data.xp3
-            artifactname: krkrsdl2-macos-appbundle
-            artifactpath: build/krkrsdl2_repo/krkrsdl2-macos-appbundle.zip
+          - platform: MacOS
+            enabled: true
+            cmake-flags: -DOPTION_BUILD_MACOS_BUNDLE=ON -DEMBED_DATA_PATH=data.xp3
+            bundle-path: build/krkrsdl2_repo/krkrsdl2.app
+            artifact-name: krkrsdl2-macos-appbundle
+            artifact-path: build/krkrsdl2_repo/krkrsdl2-macos-appbundle.zip
+
+          - platform: iOS
+            enabled: true
+            cmake-flags: -GXcode -DCMAKE_SYSTEM_NAME=iOS -DEMBED_DATA_PATH=data.xp3
+            bundle-path: build/krkrsdl2_repo/Debug-iphoneos/krkrsdl2.app
+            artifact-name: krkrsdl2-ios-appbundle
+            artifact-path: build/krkrsdl2_repo/krkrsdl2-ios-appbundle.zip
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -281,93 +297,33 @@ jobs:
 
       - name: Build project
         run: |
-          cmake -S . -B build ${{ matrix.appbundle.cmakeflags }}
-          cmake --build build
-
-      - run: ditto -ck --rsrc --sequesterRsrc --keepParent build/krkrsdl2_repo/krkrsdl2.app build/krkrsdl2_repo/krkrsdl2-macos-appbundle.zip
-        if: matrix.appbundle.enabled == true
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@master
-        with:
-          name: ${{ matrix.appbundle.artifactname }}
-          path: ${{ matrix.appbundle.artifactpath }}
-
-  build-ios-cmake:
-    runs-on: macos-11
-    timeout-minutes: 20
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with:
-          submodules: recursive
-
-      - name: Download krkrsdl2-kag3-demo build
-        run: curl -LOC - https://github.com/krkrsdl2/krkrsdl2-kag3-demo/releases/download/latest/data.xp3
-
-      - name: Set up default build tools
-        run: brew install make nasm ninja cmake
-
-      - name: Build project
-        run: |
-          cmake -S . -B build -GXcode -DCMAKE_SYSTEM_NAME=iOS -DEMBED_DATA_PATH=data.xp3
+          cmake -S . -B build ${{ matrix.appbundle.cmake-flags }}
           cmake --build build
 
       - name: Create app bundle
-        run: ditto -ck --rsrc --sequesterRsrc --keepParent build/krkrsdl2_repo/Debug-iphoneos/krkrsdl2.app build/krkrsdl2_repo/krkrsdl2-ios-appbundle.zip
+        run: ditto -ck --rsrc --sequesterRsrc --keepParent ${{ matrix.appbundle.bundle-path }} ${{ matrix.appbundle.artifact-path }}
+        if: matrix.appbundle.enabled == true
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
-          name: krkrsdl2-ios-appbundle
-          path: build/krkrsdl2_repo/krkrsdl2-ios-appbundle.zip
+          name: ${{ matrix.appbundle.artifact-name }}
+          path: ${{ matrix.appbundle.artifact-path }}
 
   create-release:
     needs:
       - build-web
       - build-ubuntu
-      - build-macos-cmake
-      - build-ios-cmake
+      - build-win32
+      - build-darwin-cmake
       - build-vita
       - build-switch
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Download web artifact
-        uses: actions/download-artifact@v1
-        with:
-          name: krkrsdl2-web
-
-      - name: Download ubuntu artifact
-        uses: actions/download-artifact@v1
-        with:
-          name: krkrsdl2-ubuntu
-
-      - name: Download vita artifact
-        uses: actions/download-artifact@v1
-        with:
-          name: krkrsdl2-vita
-
-      - name: Download switch artifact
-        uses: actions/download-artifact@v1
-        with:
-          name: krkrsdl2-switch
-
-      - name: Download macos artifact
-        uses: actions/download-artifact@v1
-        with:
-          name: krkrsdl2-macos
-
-      - name: Download macos-appbundle artifact
-        uses: actions/download-artifact@v1
-        with:
-          name: krkrsdl2-macos-appbundle
-
-      - name: Download ios-appbundle artifact
-        uses: actions/download-artifact@v1
-        with:
-          name: krkrsdl2-ios-appbundle
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
 
       - name: Prepare artifacts for release
         run: |
@@ -377,15 +333,15 @@ jobs:
           cp krkrsdl2-switch/krkrsdl2.nro krkrsdl2.nro
           7z a -tzip krkrsdl2-macos.zip krkrsdl2-macos/*
           cp krkrsdl2-macos-appbundle/krkrsdl2-macos-appbundle.zip krkrsdl2-macos-appbundle.zip
+          find . -name 'krkrsdl2-win32-*' -type d | while read -r dir; do
+            7z a -tzip "${dir}.zip" "$dir/*"
+          done
 
-      - name: Create prerelease
-        if: github.ref == 'refs/heads/main'
-        uses: marvinpinto/action-automatic-releases@latest
+      - name: Create a draft prerelease
+        uses: softprops/action-gh-release@v2
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          draft: true
           prerelease: true
-          automatic_release_tag: latest
-          title: Latest development builds
           files: |
             krkrsdl2-web.zip
             krkrsdl2-ubuntu.zip
@@ -394,3 +350,4 @@ jobs:
             krkrsdl2-macos.zip
             krkrsdl2-macos-appbundle.zip
             krkrsdl2-ios-appbundle.zip
+            krkrsdl2-win32-*.zip
